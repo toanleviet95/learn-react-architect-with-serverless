@@ -11,7 +11,8 @@ import {
     serviceWithDataLayer,
     update,
     WebApp,
-    withDataLayer
+    withDataLayer,
+    EnvValue
 } from "infrastructure-components";
 
 import { utcstring, setDate } from './utils';
@@ -24,7 +25,9 @@ export default (
         region='ap-southeast-1'>
             <Environment
                 name="dev"
-            />
+            >
+                <EnvValue name="MY_VARIABLE" value="hello world" />
+            </Environment>
 
             <DataLayer id='datalayer'>
                 <Entry
