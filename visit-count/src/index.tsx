@@ -1,27 +1,94 @@
+import React from 'react';
+import { GraphQLString } from 'graphql';
+import { Query } from 'react-apollo';
 import {
+    DataLayer,
+    Entry,
     Environment,
     Route,
-    SinglePageApp
+    IsomorphicApp,
+    Middleware,
+    serviceWithDataLayer,
+    update,
+    WebApp,
+    withDataLayer
 } from "infrastructure-components";
 
+import { utcstring, setDate } from './utils';
 
 export default (
-    <SinglePageApp
-        stackName = "spa-example"
+    <IsomorphicApp
+        stackName = "visit-count"
         buildPath = 'build'
-        region='eu-west-1'>
+        assetsPath='assets'
+        region='ap-southeast-1'>
+            <Environment
+                name="dev"
+            />
 
-        <Environment
-            name="dev"
-            domain="my.domain.com"
-            certArn="arn:aws:acm:us-east-1:************:certificate/********-****-****-****-************"
-        />
-
-        <Route
-            path='/'
-            name='Infrastructure-Components'
-            render={()=><div>Hello Infrastructure-Components!</div>}
-        />
-
-
-    </SinglePageApp>);
+            <DataLayer id='datalayer'>
+                <Entry
+                    id='visitentry'
+                    primaryKey='visittimestamp'
+                    data={{ visitcount: GraphQLString }}
+                />
+                <WebApp
+                    id='main'
+                    path='*'
+                    method='GET'
+                >
+                    <Route
+                        path='/'
+                        name='React-Architect'
+                        render={withDataLayer(props => {
+                            return (
+                                <div>
+                                    <Query {...props.getEntryScanQuery('visitentry', {
+                                        visittimestamp: [
+                                            utcstring(setDate(new Date(), 0)),
+                                            utcstring(setDate(new Date(), 23))
+                                        ]
+                                    })}>
+                                        {
+                                            (loading, data, error) => {
+                                                return (
+                                                    loading && <div>Calculating...</div>
+                                                ) || (
+                                                    data && <div>
+                                                        Total visitors today: {
+                                                            data['scan_visitentry_visittimestamp'].reduce(
+                                                                (total, entry) => total + parseInt(entry.visitcount), 0
+                                                            )
+                                                        }
+                                                    </div>
+                                                ) || (
+                                                    <div>Error loading data</div>
+                                                )
+                                            }
+                                        }
+                                    </Query> 
+                                </div>
+                            )
+                        })}
+                    >
+                        <Middleware
+                            callback={
+                                serviceWithDataLayer(
+                                    async function (dataLayer, req, res, next) {
+                                        await update(
+                                            dataLayer.client,
+                                            dataLayer.updateEntryQuery('visitentry', data => ({
+                                                visittimestamp: utcstring(new Date()),
+                                                visitcount: data.visitcount ? parseInt(data.visitcount) + 1 : 1
+                                            }))
+                                        );
+                                        next();
+                                    }
+                                )
+                            }
+                        />
+                    </Route>
+                </WebApp>
+            </DataLayer>
+    </IsomorphicApp>
+);
